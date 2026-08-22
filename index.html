@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CAT Mock Performance Analytics</title>
+  <!-- Chart.js Library -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { background-color: #f4f6f8; color: #1f2937; padding: 20px; }
+    
+    .dashboard { display: grid; grid-template-columns: 280px 1fr; gap: 20px; max-width: 1400px; margin: 0 auto; }
+    
+    /* Left Sidebar */
+    .filter-card { background: #ffffff; padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .filter-card h3 { font-size: 16px; margin-bottom: 15px; color: #111827; }
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; font-size: 12px; font-weight: 600; color: #4b5563; margin-bottom: 5px; }
+    input[type="text"], input[type="date"], input[type="number"], select {
+      width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; outline: none; background: #fff;
+    }
+    input:focus, select:focus { border-color: #4f46e5; }
+    .btn-reset { width: 100%; padding: 10px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px; color: #374151; font-weight: 600; cursor: pointer; margin-top: 10px; }
+    .btn-reset:hover { background: #e5e7eb; }
+
+    /* Right Layout */
+    .main-content { display: flex; flex-direction: column; gap: 20px; }
+
+    /* KPI Cards */
+    .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
+    .kpi-card { background: #ffffff; padding: 16px; border-radius: 12px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .kpi-title { font-size: 12px; color: #6b7280; margin-bottom: 6px; font-weight: 600; }
+    .kpi-value { font-size: 22px; font-weight: 700; color: #111827; }
+
+    /* Chart Containers */
+    .content-box { background: #ffffff; padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .box-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+    .box-header h4 { font-size: 15px; font-weight: 700; color: #111827; }
+    .charts-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; align-items: center; }
+
+    /* Form & Buttons */
+    .btn-add { background: #4f46e5; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; }
+    .btn-add:hover { background: #4338ca; }
+    .btn-delete { background: #fee2e2; color: #dc2626; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; }
+    .btn-delete:hover { background: #fca5a5; }
+
+    /* Log Table */
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; text-align: left; font-size: 13px; }
+    th, td { padding: 12px; border-bottom: 1px solid #f3f4f6; }
+    th { background-color: #f9fafb; color: #4b5563; font-weight: 600; }
+    tr:hover { background-color: #f9fafb; }
+    .badge { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .bg-full { background: #e0e7ff; color: #3730a3; }
+    .bg-sectional { background: #fef3c7; color: #92400e; }
+    .bg-pyq { background: #d1fae5; color: #065f46; }
+  </style>
+</head>
+<body>
+
+<div class="dashboard">
+  <!-- Left Controls -->
+  <div class="filter-card">
+    <h3>Filters & Search</h3>
+    
+    <div class="form-group">
+      <label>Search Logs</label>
+      <input type="text" id="searchInput" placeholder="Search section, time..." onkeyup="applyFilters()">
+    </div>
+
+    <div class="form-group">
+      <label>Specific Date</label>
+      <input type="date" id="filterDate" onchange="applyFilters()">
+    </div>
+
+    <div class="form-group">
+      <label>Section</label>
+      <select id="sectionFilter" onchange="applyFilters()">
+        <option value="All">All Sections</option>
+        <option value="VARC">VARC</option>
+        <option value="DILR">DILR</option>
+        <option value="Quant">Quant</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Mock Type</label>
+      <select id="typeFilter" onchange="applyFilters()">
+        <option value="All">All Types</option>
+        <option value="Full Mock">Full Mock</option>
+        <option value="Sectional Mock">Sectional Mock</option>
+        <option value="PYQ">PYQ</option>
+      </select>
+    </div>
+
+    <button class="btn-reset" onclick="resetAllFilters()">Reset All Filters</button>
+  </div>
+
+  <!-- Right Main Area -->
+  <div class="main-content">
+    
+    <!-- KPI Row -->
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-title">🎯 Avg Accuracy</div>
+        <div class="kpi-value" id="kpiAccuracy">0%</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">📊 Total Tests</div>
+        <div class="kpi-value" id="kpiCount">0</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">🏆 Avg Score</div>
+        <div class="kpi-value" id="kpiScore">0</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">📈 Avg Percentile</div>
+        <div class="kpi-value" id="kpiPercentile">0</div>
+      </div>
+    </div>
+
+    <!-- Charts Container -->
+    <div class="content-box">
+      <div class="box-header">
+        <h4>Performance Metrics & Distribution</h4>
+        <div>
+          <label style="font-size: 12px; font-weight:600;">Metric: </label>
+          <select id="chartMetric" style="width: 120px; display:inline-block;" onchange="updateCharts()">
+            <option value="percentile">Percentile</option>
+            <option value="accuracy">Accuracy %</option>
+            <option value="score">Score</option>
+          </select>
+        </div>
+      </div>
+      <div class="charts-grid">
+        <div>
+          <canvas id="lineChart" height="150"></canvas>
+        </div>
+        <div>
+          <canvas id="pieChart" height="150"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Log Table -->
+    <div class="content-box">
+      <div class="box-header">
+        <h4>Mock Score Logs</h4>
+        <button class="btn-add" onclick="toggleForm()">+ Add New Mock Record</button>
+      </div>
+
+      <!-- Entry Form -->
+      <div id="addForm" style="display:none; background:#f9fafb; padding:15px; border-radius:8px; margin-bottom:15px; border:1px solid #e5e7eb;">
+        <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; margin-bottom:10px;">
+          <div><label>Date</label><input type="date" id="inDate"></div>
+          <div><label>Time</label><input type="text" id="inTime" placeholder="e.g. 10:00 AM"></div>
+          <div>
+            <label>Type</label>
+            <select id="inType">
+              <option value="Full Mock">Full Mock</option>
+              <option value="Sectional Mock">Sectional Mock</option>
+              <option value="PYQ">PYQ</option>
+            </select>
+          </div>
+          <div>
+            <label>Section</label>
+            <select id="inSection">
+              <option value="All Sections">All Sections</option>
+              <option value="VARC">VARC</option>
+              <option value="DILR">DILR</option>
+              <option value="Quant">Quant</option>
+            </select>
+          </div>
+          <div><label>Score</label><input type="number" id="inScore" placeholder="Score"></div>
+          <div><label>Percentile</label><input type="number" id="inPercentile" placeholder="Percentile"></div>
+          <div><label>Accuracy %</label><input type="number" id="inAccuracy" placeholder="Accuracy"></div>
+        </div>
+        <button class="btn-add" onclick="saveRecord()">Save Entry</button>
+      </div>
+
+      <!-- Table Structure -->
+      <table>
+        <thead>
+          <tr>
+            <th>Analyzed ✔</th>
+            <th>Date & Time</th>
+            <th>Type</th>
+            <th>Section</th>
+            <th>Score</th>
+            <th>Percentile</th>
+            <th>Accuracy</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // App State & Persistence
+  let records = JSON.parse(localStorage.getItem('catData_v4')) || [];
+
+  let lineChartObj = null;
+  let pieChartObj = null;
+
+  function persist() {
+    localStorage.setItem('catData_v4', JSON.stringify(records));
+  }
+
+  function toggleForm() {
+    const el = document.getElementById('addForm');
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  }
+
+  function saveRecord() {
+    const date = document.getElementById('inDate').value;
+    const time = document.getElementById('inTime').value || 'Morning';
+    const type = document.getElementById('inType').value;
+    const section = document.getElementById('inSection').value;
+    const score = parseFloat(document.getElementById('inScore').value) || 0;
+    const percentile = parseFloat(document.getElementById('inPercentile').value) || 0;
+    const accuracy = parseFloat(document.getElementById('inAccuracy').value) || 0;
+
+    if (!date) {
+      alert("Please select a date.");
+      return;
+    }
+
+    records.push({
+      id: Date.now(),
+      date, time, type, section, score, percentile, accuracy, analyzed: false
+    });
+
+    persist();
+    toggleForm();
+    applyFilters();
+  }
+
+  function deleteRecord(id) {
+    if (confirm("Delete this entry?")) {
+      records = records.filter(r => r.id !== id);
+      persist();
+      applyFilters();
+    }
+  }
+
+  function toggleCheck(id) {
+    const item = records.find(r => r.id === id);
+    if (item) {
+      item.analyzed = !item.analyzed;
+      persist();
+      applyFilters();
+    }
+  }
+
+  function applyFilters() {
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    const dateVal = document.getElementById('filterDate').value;
+    const sectionVal = document.getElementById('sectionFilter').value;
+    const typeVal = document.getElementById('typeFilter').value;
+
+    const filtered = records.filter(r => {
+      const matchSearch = !search || r.section.toLowerCase().includes(search) || r.type.toLowerCase().includes(search) || r.time.toLowerCase().includes(search);
+      const matchDate = !dateVal || r.date === dateVal;
+      const matchSection = sectionVal === 'All' || r.section === sectionVal;
+      const matchType = typeVal === 'All' || r.type === typeVal;
+
+      return matchSearch && matchDate && matchSection && matchType;
+    });
+
+    renderTable(filtered);
+    updateKPIs(filtered);
+    updateCharts(filtered);
+  }
+
+  function renderTable(data) {
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '';
+
+    if (data.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:20px; color:#9ca3af;">No records found.</td></tr>`;
+      return;
+    }
+
+    const sorted = [...data].sort((a,b) => new Date(b.date) - new Date(a.date));
+
+    sorted.forEach(r => {
+      let badgeClass = r.type === 'Full Mock' ? 'bg-full' : (r.type === 'PYQ' ? 'bg-pyq' : 'bg-sectional');
+      tbody.innerHTML += `
+        <tr>
+          <td><input type="checkbox" ${r.analyzed ? 'checked' : ''} onchange="toggleCheck(${r.id})"></td>
+          <td>${r.date}<br><small style="color:#6b7280">${r.time}</small></td>
+          <td><span class="badge ${badgeClass}">${r.type}</span></td>
+          <td><strong>${r.section}</strong></td>
+          <td>${r.score}</td>
+          <td>${r.percentile}%ile</td>
+          <td>${r.accuracy}%</td>
+          <td><span style="color:${r.analyzed ? '#10b981' : '#f59e0b'}; font-weight:600;">${r.analyzed ? 'Analyzed' : 'Pending'}</span></td>
+          <td><button class="btn-delete" onclick="deleteRecord(${r.id})">Delete</button></td>
+        </tr>
+      `;
+    });
+  }
+
+  function updateKPIs(data) {
+    if (data.length === 0) {
+      document.getElementById('kpiAccuracy').innerText = '0%';
+      document.getElementById('kpiCount').innerText = '0';
+      document.getElementById('kpiScore').innerText = '0';
+      document.getElementById('kpiPercentile').innerText = '0';
+      return;
+    }
+
+    let acc = (data.reduce((a, b) => a + Number(b.accuracy), 0) / data.length).toFixed(1);
+    let score = (data.reduce((a, b) => a + Number(b.score), 0) / data.length).toFixed(1);
+    let perc = (data.reduce((a, b) => a + Number(b.percentile), 0) / data.length).toFixed(1);
+
+    document.getElementById('kpiAccuracy').innerText = acc + '%';
+    document.getElementById('kpiCount').innerText = data.length;
+    document.getElementById('kpiScore').innerText = score;
+    document.getElementById('kpiPercentile').innerText = perc;
+  }
+
+  function updateCharts(data = records) {
+    const metric = document.getElementById('chartMetric').value;
+    const sorted = [...data].sort((a,b) => new Date(a.date) - new Date(b.date));
+
+    // 1. Line Chart
+    const lineCtx = document.getElementById('lineChart').getContext('2d');
+    if (lineChartObj) lineChartObj.destroy();
+    
+    lineChartObj = new Chart(lineCtx, {
+      type: 'line',
+      data: {
+        labels: sorted.map(d => d.date),
+        datasets: [{
+          label: metric.toUpperCase(),
+          data: sorted.map(d => d[metric]),
+          borderColor: '#4f46e5',
+          backgroundColor: 'rgba(79, 70, 229, 0.1)',
+          fill: true,
+          tension: 0.2
+        }]
+      },
+      options: { responsive: true, plugins: { legend: { display: true } } }
+    });
+
+    // 2. Pie Chart
+    const pieCtx = document.getElementById('pieChart').getContext('2d');
+    if (pieChartObj) pieChartObj.destroy();
+
+    const fullCount = data.filter(d => d.type === 'Full Mock').length;
+    const secCount = data.filter(d => d.type === 'Sectional Mock').length;
+    const pyqCount = data.filter(d => d.type === 'PYQ').length;
+
+    pieChartObj = new Chart(pieCtx, {
+      type: 'pie',
+      data: {
+        labels: ['Full Mock', 'Sectional', 'PYQ'],
+        datasets: [{
+          data: [fullCount, secCount, pyqCount],
+          backgroundColor: ['#4f46e5', '#f59e0b', '#10b981']
+        }]
+      },
+      options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+    });
+  }
+
+  function resetAllFilters() {
+    document.getElementById('searchInput').value = '';
+    document.getElementById('filterDate').value = '';
+    document.getElementById('sectionFilter').value = 'All';
+    document.getElementById('typeFilter').value = 'All';
+    applyFilters();
+  }
+
+  window.onload = () => {
+    applyFilters();
+  };
+</script>
+</body>
+</html>
